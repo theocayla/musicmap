@@ -1,0 +1,360 @@
+<title>Music Artist Atlas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed star-chart canvas; floating control deck top-left, artist card floats beside the picked star. Single dark world by choice. */
+:root{
+  color-scheme: dark;
+  --ink:#0a0c13; --ink-2:#121624; --panel:rgba(16,20,33,.86); --line:#262d44;
+  --fg:#e9ecf5; --fg-2:#a3abc2; --fg-3:#6b7390; --accent:#ffd27a;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--fg);font-family:var(--f-body);overflow:hidden;-webkit-font-smoothing:antialiased}
+#stage{position:fixed;inset:0;display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+#stage.dragging{cursor:grabbing}
+#stage.hovering{cursor:pointer}
+.deck{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:max(16px, env(safe-area-inset-left,0px));width:340px;max-width:calc(100vw - 32px);max-height:calc(100% - 24px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;z-index:5;scrollbar-width:thin}
+.deck header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+h1{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1.05;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{font-size:12px;color:var(--fg-2);margin:4px 0 0;line-height:1.4}
+.collapse{background:none;border:1px solid var(--line);color:var(--fg-2);border-radius:8px;width:30px;height:30px;flex:none;cursor:pointer;font-size:14px}
+.collapse:hover{color:var(--fg)}
+.deck.min .body{display:none}
+.body{display:flex;flex-direction:column;gap:16px}
+.lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--fg-3);font-weight:600;margin:0 0 7px;display:flex;justify-content:space-between;align-items:baseline}
+.lbl b{font-family:var(--f-mono);font-weight:500;color:var(--accent);letter-spacing:0;text-transform:none;font-size:12px}
+.search{position:relative}
+.search input{width:100%;box-sizing:border-box;background:var(--ink-2);border:1px solid var(--line);color:var(--fg);border-radius:9px;padding:9px 11px;font:inherit;font-size:13.5px}
+.search input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.results{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--ink-2);border:1px solid var(--line);border-radius:9px;overflow:hidden;z-index:3}
+.results button{display:flex;width:100%;gap:8px;align-items:center;text-align:left;background:none;border:0;color:var(--fg);padding:7px 11px;font:inherit;font-size:13px;cursor:pointer}
+.results button:hover,.results button.on{background:#1d2336}
+.results small{margin-left:auto;color:var(--fg-3);font-family:var(--f-mono);font-size:11px}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+#hist{width:100%;height:46px;display:block}
+.range{position:relative;height:22px}
+.range input{position:absolute;left:0;right:0;top:0;width:100%;margin:0;pointer-events:none;appearance:none;-webkit-appearance:none;background:none;height:22px}
+.range input::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);border:3px solid var(--ink);box-shadow:0 0 0 1px var(--accent);cursor:pointer}
+.range input::-moz-range-thumb{pointer-events:auto;width:12px;height:12px;border-radius:50%;background:var(--accent);border:3px solid var(--ink);cursor:pointer}
+.range .track{position:absolute;left:0;right:0;top:10px;height:2px;background:var(--line);border-radius:2px}
+.range .fill{position:absolute;top:10px;height:2px;background:var(--accent)}
+.range input:focus-visible::-webkit-slider-thumb{outline:2px solid var(--fg)}
+.presets{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.presets button,.chipbar button{background:var(--ink-2);border:1px solid var(--line);color:var(--fg-2);border-radius:999px;padding:4px 9px;font:inherit;font-size:11.5px;cursor:pointer}
+.presets button:hover{color:var(--fg);border-color:var(--fg-3)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--ink-2);border:1px solid var(--line);color:var(--fg);border-radius:999px;padding:4px 10px 4px 7px;font:inherit;font-size:12px;cursor:pointer;transition:opacity .15s}
+.chip[aria-pressed="false"]{opacity:.38}
+.chip[aria-pressed="false"] .dot{background:transparent!important;box-shadow:inset 0 0 0 1.5px currentColor}
+.chip small{color:var(--fg-3);font-family:var(--f-mono);font-size:10.5px}
+.chipbar{display:flex;gap:5px;margin-left:auto}
+.chipbar button{padding:1px 8px;font-size:10.5px;text-transform:none;letter-spacing:0}
+.toggle{display:flex;gap:10px;align-items:flex-start;font-size:13px;cursor:pointer;line-height:1.35}
+.toggle input{accent-color:var(--accent);width:16px;height:16px;margin:1px 0 0;flex:none}
+.toggle span small{display:block;color:var(--fg-3);font-size:11.5px;margin-top:2px}
+.stats{font-family:var(--f-mono);font-size:11px;color:var(--fg-3);border-top:1px solid var(--line);padding-top:10px;line-height:1.6}
+.stats b{color:var(--fg-2);font-weight:500}
+.card{position:fixed;z-index:6;top:calc(12px + env(safe-area-inset-top,0px));right:max(16px, env(safe-area-inset-right,0px));width:340px;max-width:calc(100vw - 32px);background:var(--panel);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px;box-shadow:0 20px 50px rgba(0,0,0,.45);max-height:calc(100% - 24px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto;scrollbar-width:thin}
+.card:not([hidden]) ~ .zoom{right:calc(max(16px, env(safe-area-inset-right,0px)) + 356px)}
+.card .x{position:absolute;top:10px;right:10px;background:none;border:0;color:var(--fg-3);font-size:20px;cursor:pointer;width:28px;height:28px;border-radius:6px}
+.card .x:hover{color:var(--fg);background:#1d2336}
+.card .kicker{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:600;display:flex;gap:7px;align-items:center;padding-right:28px}
+.card h2{font-family:var(--f-display);font-weight:700;font-size:24px;line-height:1.08;margin:7px 0 4px;letter-spacing:-.01em;text-wrap:balance;padding-right:20px}
+.card .meta{font-family:var(--f-mono);font-size:11.5px;color:var(--fg-2);line-height:1.6}
+.card p{font-size:13px;line-height:1.55;color:var(--fg-2);margin:10px 0}
+.card .tags{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
+.card .tags span{font-size:11px;border:1px solid var(--line);border-radius:5px;padding:2px 6px;color:var(--fg-2)}
+.fame{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-2);margin:10px 0}
+.fame .bar{flex:1;height:4px;background:var(--line);border-radius:3px;overflow:hidden}
+.fame .bar i{display:block;height:100%;background:var(--accent)}
+.fame b{font-family:var(--f-mono);font-weight:500;color:var(--fg)}
+.links{display:flex;flex-wrap:wrap;gap:4px}
+.links button{display:inline-flex;align-items:center;gap:5px;background:var(--ink-2);border:1px solid var(--line);color:var(--fg);border-radius:999px;padding:3px 9px 3px 6px;font:inherit;font-size:11.5px;cursor:pointer}
+.links button:hover{border-color:var(--fg-3)}
+.links button .dot{width:7px;height:7px}
+.wp{display:inline-block;margin-top:12px;font-size:12.5px;color:var(--accent);text-decoration:none;font-weight:500}
+.wp:hover{text-decoration:underline}
+.tip{position:fixed;z-index:4;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 8px;font-size:12px;white-space:nowrap}
+.tip small{color:var(--fg-3);font-family:var(--f-mono);margin-left:6px}
+.zoom{position:fixed;right:max(16px, env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px;z-index:5}
+.zoom button{width:38px;height:38px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--fg);font-size:18px;cursor:pointer;font-family:var(--f-mono)}
+.zoom button:hover{border-color:var(--fg-3)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@media (max-width:600px){
+  .deck{width:auto;right:max(16px, env(safe-area-inset-right,0px));max-height:55%}
+  .card{left:max(16px, env(safe-area-inset-left,0px))!important;right:max(16px, env(safe-area-inset-right,0px));width:auto;top:auto!important;bottom:calc(16px + env(safe-area-inset-bottom,0px));max-height:48%}
+  .zoom{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  .card:not([hidden]) ~ .zoom{display:none}
+}
+</style>
+
+<canvas id="stage" aria-label="Map of music artists linked by Wikipedia citations"></canvas>
+
+<aside class="deck" id="deck">
+  <header>
+    <div>
+      <h1>Music Artist Atlas</h1>
+      <p class="sub">Every star is a composer, musician or band. A line joins two artists when one's Wikipedia article links to the other.</p>
+    </div>
+    <button class="collapse" id="collapse" aria-label="Collapse controls" aria-expanded="true">–</button>
+  </header>
+  <div class="body">
+    <div class="search">
+      <input id="q" type="search" placeholder="Find an artist…" autocomplete="off" aria-label="Find an artist">
+      <div class="results" id="results" hidden></div>
+    </div>
+    <div>
+      <div class="lbl">Active between <b id="yrs"></b></div>
+      <canvas id="hist" aria-hidden="true"></canvas>
+      <div class="range">
+        <div class="track"></div><div class="fill" id="fill"></div>
+        <input type="range" id="y0" min="0" max="1000" step="1" aria-label="From year">
+        <input type="range" id="y1" min="0" max="1000" step="1" aria-label="To year">
+      </div>
+      <div class="presets" id="presets"></div>
+    </div>
+    <div>
+      <div class="lbl">Style <span class="chipbar"><button id="allOn">All</button><button id="allOff">None</button></span></div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <label class="toggle"><input type="checkbox" id="fame" checked>
+      <span>Size dots by fame<small>Fame = number of Wikipedia language editions with an article on the artist.</small></span></label>
+    <label class="toggle"><input type="checkbox" id="edgesOn" checked>
+      <span>Show links</span></label>
+    <div class="stats" id="stats"></div>
+  </div>
+</aside>
+
+<div class="tip" id="tip" hidden></div>
+<div class="card" id="card" hidden role="dialog" aria-label="Artist details"></div>
+<div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit" aria-label="Fit map" title="Fit map">⤢</button></div>
+
+<script>/*DATA*/</script>
+<script>
+(()=>{
+const D=window.MUSIC_DATA, CATS=D.cats.concat(['Other']);
+const COLORS=['#e6c88a','#e5484d','#ff8cc6','#a873ff','#f5913b','#2fd9c8','#8f9bb3','#c4f25a','#4aa3ff','#7c78ff','#c08f5a','#ffe15c','#3fbf62','#69708a'];
+const OTHER=CATS.length-1;
+const NOW=new Date().getFullYear();
+// nodes: [name,x,y,sl,start,end,prim,mask,group,birth,death,country,genres,text,wiki]
+const N=D.nodes.map((a,i)=>({i,name:a[0],x:a[1],y:a[2],sl:a[3],start:a[4],end:a[5]>=2026?NOW:a[5],prim:a[6]<0?OTHER:a[6],mask:a[7]||(1<<OTHER),group:a[8],birth:a[9],death:a[10],country:a[11],genres:a[12],text:a[13],wiki:a[14],adj:[],vis:true}));
+const E=D.edges, M=E.length/2;
+for(let k=0;k<M;k++){N[E[2*k]].adj.push(E[2*k+1]);N[E[2*k+1]].adj.push(E[2*k]);}
+const byFame=[...N].sort((a,b)=>b.sl-a.sl);
+const maxSl=byFame[0].sl;
+N.forEach(n=>{n.rf=1.3+Math.sqrt(n.sl)*0.62; n.lc=n.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');});
+let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+N.forEach(n=>{minX=Math.min(minX,n.x);maxX=Math.max(maxX,n.x);minY=Math.min(minY,n.y);maxY=Math.max(maxY,n.y);});
+
+// ---- year axis (compressed before 1900) ----
+const YMIN=Math.min(1550,Math.floor(Math.min(...N.map(n=>n.start))/50)*50), YMAX=NOW;
+const KY=[YMIN,1600,1900,YMAX], KT=[0,0.07,0.33,1]; // piecewise axis: early centuries compressed
+const t2y=t=>{t/=1000; for(let i=0;i<3;i++) if(t<=KT[i+1]||i==2) return Math.round(KY[i]+(KY[i+1]-KY[i])*(t-KT[i])/(KT[i+1]-KT[i]));};
+const y2t=y=>{ for(let i=0;i<3;i++) if(y<=KY[i+1]||i==2) return 1000*(KT[i]+(KT[i+1]-KT[i])*(Math.max(y,KY[0])-KY[i])/(KY[i+1]-KY[i])); };
+const state={y0:YMIN,y1:YMAX,cats:(1<<CATS.length)-1,fame:true,edges:true,sel:null,hover:null};
+
+// ---- canvas ----
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1,view={k:1,x:0,y:0};
+function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*DPR;cv.height=H*DPR;dirty();}
+function fit(anim){const pad=40,deckW=(W>700?360:0);const k=Math.min((W-deckW-pad*2)/(maxX-minX),(H-pad*2)/(maxY-minY));
+  const target={k,x:deckW/2+W/2-k*(minX+maxX)/2,y:H/2-k*(minY+maxY)/2}; anim?flyView(target):(view=target,dirty());}
+const nodeR=n=>{const base=state.fame?n.rf:3.2; return Math.max(0.9,base*Math.pow(view.k,0.62)*1.15);};
+let raf=0; function dirty(){if(!raf)raf=requestAnimationFrame(draw);}
+let intro=1; // 0..1 self-organising entrance
+const P=(n)=>{const e=intro; return [ (n.x*(0.35+0.65*e))*view.k+view.x, (n.y*(0.35+0.65*e))*view.k+view.y ];};
+
+function alpha(c,a){return c+Math.round(a*255).toString(16).padStart(2,'0');}
+function draw(){
+  raf=0; ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,W,H);
+  // vignette sky
+  const g=ctx.createRadialGradient(W*0.55,H*0.5,0,W*0.55,H*0.5,Math.max(W,H)*0.75);
+  g.addColorStop(0,'#111628');g.addColorStop(1,'#0a0c13');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  const sel=state.sel, nb=sel?new Set(sel.adj):null;
+  const sp=N.map(P);
+  // edges
+  if(state.edges){
+    const ea=Math.min(0.22,0.05+view.k*0.05)*(sel?0.35:1);
+    ctx.lineWidth=Math.min(1.2,0.4+view.k*0.25);
+    const paths=CATS.map(()=>new Path2D());
+    for(let k=0;k<M;k++){const a=E[2*k],b=E[2*k+1];const na=N[a],nb2=N[b]; if(!na.vis||!nb2.vis)continue;
+      const pa=sp[a],pb=sp[b];
+      if((pa[0]<0&&pb[0]<0)||(pa[0]>W&&pb[0]>W)||(pa[1]<0&&pb[1]<0)||(pa[1]>H&&pb[1]>H))continue;
+      const p=paths[na.sl>=nb2.sl?na.prim:nb2.prim]; p.moveTo(pa[0],pa[1]); p.lineTo(pb[0],pb[1]);}
+    paths.forEach((p,i)=>{ctx.strokeStyle=alpha(COLORS[i],ea);ctx.stroke(p);});
+  }
+  if(sel){ctx.lineWidth=sel.adj.length>80?0.8:1.3;ctx.strokeStyle=sel.adj.length>80?'rgba(255,236,200,.32)':'rgba(255,236,200,.7)';ctx.beginPath();
+    sel.adj.forEach(j=>{if(!N[j].vis)return;ctx.moveTo(sp[sel.i][0],sp[sel.i][1]);ctx.lineTo(sp[j][0],sp[j][1]);});ctx.stroke();}
+  // ghost (filtered-out) nodes
+  ctx.fillStyle='rgba(120,130,170,.10)'; ctx.beginPath();
+  for(const n of N){if(n.vis)continue;const p=sp[n.i];if(p[0]<-5||p[0]>W+5||p[1]<-5||p[1]>H+5)continue;ctx.moveTo(p[0]+1.2,p[1]);ctx.arc(p[0],p[1],1.2,0,6.283);} ctx.fill();
+  // nodes by colour, smallest first so big stars sit on top
+  const paths=CATS.map(()=>new Path2D()), dim=CATS.map(()=>new Path2D());
+  for(let q=N.length-1;q>=0;q--){const n=byFame[q]; if(!n.vis)continue; const p=sp[n.i], r=nodeR(n);
+    if(p[0]<-r||p[0]>W+r||p[1]<-r||p[1]>H+r)continue;
+    const tgt=(sel&&n!==sel&&!nb.has(n.i))?dim[n.prim]:paths[n.prim]; tgt.moveTo(p[0]+r,p[1]); tgt.arc(p[0],p[1],r,0,6.283);}
+  CATS.forEach((c,i)=>{ctx.fillStyle=alpha(COLORS[i],0.18);ctx.fill(dim[i]);ctx.fillStyle=COLORS[i];ctx.fill(paths[i]);});
+  // halos for selection / hover
+  for(const n of [state.hover,sel]){ if(!n)continue; const p=sp[n.i],r=nodeR(n)+4; ctx.strokeStyle='#fff';ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(p[0],p[1],r,0,6.283);ctx.stroke(); }
+  drawLabels(sp,sel,nb);
+}
+function drawLabels(sp,sel,nb){
+  const placed=[]; const cell=60, grid=new Map();
+  const hit=(x0,y0,x1,y1)=>{for(let gx=Math.floor(x0/cell);gx<=Math.floor(x1/cell);gx++)for(let gy=Math.floor(y0/cell);gy<=Math.floor(y1/cell);gy++){const L=grid.get(gx+','+gy);if(L)for(const b of L)if(x0<b[2]&&x1>b[0]&&y0<b[3]&&y1>b[1])return true;}return false;};
+  const add=b=>{for(let gx=Math.floor(b[0]/cell);gx<=Math.floor(b[2]/cell);gx++)for(let gy=Math.floor(b[1]/cell);gy<=Math.floor(b[3]/cell);gy++){const k=gx+','+gy;(grid.get(k)||grid.set(k,[]).get(k)).push(b);}};
+  const list=[]; if(sel){list.push(sel);sel.adj.map(j=>N[j]).sort((a,b)=>b.sl-a.sl).forEach(n=>list.push(n));}
+  if(state.hover)list.unshift(state.hover);
+  let budget=Math.round(W*H/8000), tries=0;
+  for(const n of list.concat(byFame)){ if(!n.vis)continue; if(tries++>2500||budget<=0)break;
+    const p=sp[n.i]; if(p[0]<-50||p[0]>W+50||p[1]<0||p[1]>H)continue;
+    const r=nodeR(n); const big=n.sl>110; const fs=Math.round(Math.min(17,Math.max(10.5,9+Math.sqrt(n.sl)*0.35*Math.pow(view.k,0.25))));
+    ctx.font=`${big?600:500} ${fs}px "IBM Plex Sans",system-ui,sans-serif`;
+    const w=ctx.measureText(n.name).width, x=p[0]-w/2, y=p[1]+r+3;
+    const b=[x-4,y-2,x+w+4,y+fs+2]; const forced=n===sel||n===state.hover;
+    if(!forced&&hit(...b))continue; add(b); budget--;
+    const dimmed=sel&&n!==sel&&!nb.has(n.i);
+    ctx.fillStyle='rgba(10,12,19,.72)'; ctx.fillText(n.name,x+0.7,y+fs-2+0.7);
+    ctx.fillStyle=dimmed?'rgba(233,236,245,.25)':(forced?'#fff':'rgba(233,236,245,.86)'); ctx.fillText(n.name,x,y+fs-2);
+  }
+}
+
+// ---- hit testing (world grid) ----
+const GC=40, wgrid=new Map(); N.forEach(n=>{const k=Math.floor(n.x/GC)+','+Math.floor(n.y/GC);(wgrid.get(k)||wgrid.set(k,[]).get(k)).push(n);});
+function pick(sx,sy){const wx=(sx-view.x)/view.k, wy=(sy-view.y)/view.k; let best=null,bd=Infinity;
+  const rad=Math.max(14/view.k,GC); const gx0=Math.floor((wx-rad)/GC),gx1=Math.floor((wx+rad)/GC),gy0=Math.floor((wy-rad)/GC),gy1=Math.floor((wy+rad)/GC);
+  for(let gx=gx0;gx<=gx1;gx++)for(let gy=gy0;gy<=gy1;gy++){const L=wgrid.get(gx+','+gy);if(!L)continue;for(const n of L){if(!n.vis)continue;
+    const dx=n.x*view.k+view.x-sx,dy=n.y*view.k+view.y-sy,d=Math.hypot(dx,dy); const r=Math.max(nodeR(n),7)+2; if(d<r&&d<bd){bd=d;best=n;}}}
+  return best;}
+
+// ---- interaction ----
+const pts=new Map(); let moved=false, pinch0=null, downAt=null;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);moved=false;downAt=[e.clientX,e.clientY];
+  if(pts.size===2){const [a,b]=[...pts.values()];pinch0={d:Math.hypot(a[0]-b[0],a[1]-b[1]),k:view.k,cx:(a[0]+b[0])/2,cy:(a[1]+b[1])/2,vx:view.x,vy:view.y};}
+  cv.classList.add('dragging');});
+cv.addEventListener('pointermove',e=>{
+  if(!pts.has(e.pointerId)){const n=pick(e.clientX,e.clientY); if(n!==state.hover){state.hover=n;cv.classList.toggle('hovering',!!n);dirty();} showTip(n,e.clientX,e.clientY); return;}
+  const prev=pts.get(e.pointerId); pts.set(e.pointerId,[e.clientX,e.clientY]);
+  if(Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])>4)moved=true;
+  if(pts.size===2&&pinch0){const [a,b]=[...pts.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]);const k=clampK(pinch0.k*d/pinch0.d);
+    const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2; view.x=cx-(pinch0.cx-pinch0.vx)*k/pinch0.k; view.y=cy-(pinch0.cy-pinch0.vy)*k/pinch0.k; view.k=k; dirty(); return;}
+  view.x+=e.clientX-prev[0]; view.y+=e.clientY-prev[1]; tip.hidden=true; if(moved)placeCard(); dirty();});
+const up=e=>{pts.delete(e.pointerId); if(pts.size<2)pinch0=null; if(!pts.size)cv.classList.remove('dragging');
+  if(e.type==='pointerup'&&!moved&&pts.size===0){const n=pick(e.clientX,e.clientY); select(n); if(n){const sx=n.x*view.k+view.x; if(W>600&&sx>W-card.offsetWidth-48)flyTo(n);}} };
+cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+cv.addEventListener('pointerleave',()=>{if(state.hover){state.hover=null;dirty();}tip.hidden=true;});
+const clampK=k=>Math.max(0.03,Math.min(12,k));
+function zoomAt(f,sx,sy){const k=clampK(view.k*f);view.x=sx-(sx-view.x)*k/view.k;view.y=sy-(sy-view.y)*k/view.k;view.k=k;placeCard();dirty();}
+cv.addEventListener('wheel',e=>{e.preventDefault();zoomAt(Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0018)),e.clientX,e.clientY);},{passive:false});
+document.getElementById('zin').onclick=()=>zoomAt(1.5,W/2,H/2);
+document.getElementById('zout').onclick=()=>zoomAt(1/1.5,W/2,H/2);
+document.getElementById('zfit').onclick=()=>fit(true);
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let flyRaf=0;
+function flyView(t){cancelAnimationFrame(flyRaf); if(reduce){view=t;placeCard();dirty();return;} const s={...view},t0=performance.now(),dur=650;
+  const step=now=>{let u=Math.min(1,(now-t0)/dur);u=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;
+    const lk=Math.log(s.k)+(Math.log(t.k)-Math.log(s.k))*u; view.k=Math.exp(lk); view.x=s.x+(t.x-s.x)*u; view.y=s.y+(t.y-s.y)*u; placeCard(); dirty(); if(u<1)flyRaf=requestAnimationFrame(step);};
+  flyRaf=requestAnimationFrame(step);}
+function flyTo(n){const k=Math.max(view.k,1.1); const dk=document.getElementById('deck'); const L=W>600&&!dk.classList.contains('min')?dk.offsetWidth+16:0, R=W>600&&!card.hidden?card.offsetWidth+16:0; flyView({k,x:(L+W-R)/2-n.x*k,y:(W>600?H/2:H*0.3)-n.y*k});}
+
+const tip=document.getElementById('tip');
+function showTip(n,x,y){if(!n){tip.hidden=true;return;} tip.innerHTML=`${esc(n.name)}<small>${yrs(n)}</small>`; tip.hidden=false;
+  const r=tip.getBoundingClientRect(); tip.style.left=Math.min(W-r.width-8,x+14)+'px'; tip.style.top=Math.max(8,y-30)+'px';}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const yrs=n=>`${n.start}–${n.end>=NOW?'now':n.end}`;
+
+// ---- card ----
+const card=document.getElementById('card');
+function select(n){state.sel=n; if(!n){card.hidden=true;dirty();return;} renderCard(n); card.hidden=false; placeCard(); dirty();}
+function renderCard(n){
+  const life = n.group? (n.start?`Formed ${n.start}`:'')+(n.end<NOW?` · split ${n.end}`:' · active')
+    : (n.birth!=null?`${fmtY(n.birth)}–${n.death!=null?fmtY(n.death):''}`:'');
+  const nbs=n.adj.map(j=>N[j]).sort((a,b)=>b.sl-a.sl);
+  const shown=nbs.slice(0,18);
+  card.innerHTML=`<button class="x" aria-label="Close">×</button>
+   <div class="kicker" style="color:${COLORS[n.prim]}"><span class="dot" style="background:${COLORS[n.prim]}"></span>${esc(CATS[n.prim])} · ${n.group?'Band / group':'Artist'}</div>
+   <h2>${esc(n.name)}</h2>
+   <div class="meta">${life?esc(life)+'<br>':''}Active ${yrs(n)}${n.country?' · '+esc(n.country):''}</div>
+   ${n.genres?`<div class="tags">${n.genres.split(', ').map(g=>`<span>${esc(g)}</span>`).join('')}</div>`:''}
+   ${n.text?`<p>${esc(n.text)}</p>`:''}
+   <div class="fame"><span>Fame</span><span class="bar"><i style="width:${Math.round(100*Math.sqrt(n.sl/maxSl))}%"></i></span><b>${n.sl}</b><span>wikis</span></div>
+   <div class="lbl">Linked artists <b>${nbs.length}</b></div>
+   <div class="links">${shown.map(m=>`<button data-i="${m.i}"><span class="dot" style="background:${COLORS[m.prim]}"></span>${esc(m.name)}</button>`).join('')}${nbs.length>shown.length?`<button data-more="1">+${nbs.length-shown.length} more</button>`:''}</div>
+   <a class="wp" href="https://en.wikipedia.org/wiki/${encodeURIComponent(n.wiki)}" target="_blank" rel="noopener">Read on Wikipedia ↗</a>`;
+  card.querySelector('.x').onclick=()=>select(null);
+  card.querySelectorAll('.links button').forEach(b=>b.onclick=()=>{ if(b.dataset.more){ const box=card.querySelector('.links'); box.innerHTML=nbs.map(m=>`<button data-i="${m.i}"><span class="dot" style="background:${COLORS[m.prim]}"></span>${esc(m.name)}</button>`).join(''); box.querySelectorAll('button').forEach(bb=>bb.onclick=()=>go(N[+bb.dataset.i])); return;} go(N[+b.dataset.i]);});
+  card.scrollTop=0;
+}
+const fmtY=y=>y<0?`${-y} BC`:y;
+function go(n){ if(!n.vis){ // make sure it is visible under current filters
+    state.cats|=n.mask; state.y0=Math.min(state.y0,n.start); state.y1=Math.max(state.y1,n.end); syncUI(); applyFilters(); }
+  select(n); flyTo(n);}
+function placeCard(){ if(card.hidden||!state.sel)return; {card.style.left='';card.style.top='';return;}
+  const n=state.sel, sx=n.x*view.k+view.x, sy=n.y*view.k+view.y, cw=card.offsetWidth, ch=card.offsetHeight;
+  let x=sx+22, y=sy-40; if(x+cw>W-16)x=sx-22-cw; x=Math.max(16,Math.min(W-cw-16,x)); y=Math.max(16,Math.min(H-ch-16,y));
+  card.style.left=x+'px'; card.style.top=y+'px';}
+addEventListener('keydown',e=>{if(e.key==='Escape'){select(null);results.hidden=true;}});
+
+// ---- filters UI ----
+const chips=document.getElementById('chips');
+const catCount=CATS.map(()=>0); N.forEach(n=>catCount[n.prim]++);
+CATS.forEach((c,i)=>{const b=document.createElement('button');b.className='chip';b.dataset.i=i;b.setAttribute('aria-pressed','true');
+  b.innerHTML=`<span class="dot" style="background:${COLORS[i]};color:${COLORS[i]}"></span>${esc(c)} <small>${catCount[i].toLocaleString()}</small>`;
+  b.onclick=e=>{ if(e.altKey||e.metaKey){state.cats=1<<i;} else state.cats^=(1<<i); syncUI(); applyFilters();}; chips.appendChild(b);});
+document.getElementById('allOn').onclick=()=>{state.cats=(1<<CATS.length)-1;syncUI();applyFilters();};
+document.getElementById('allOff').onclick=()=>{state.cats=0;syncUI();applyFilters();};
+const y0=document.getElementById('y0'),y1=document.getElementById('y1'),fill=document.getElementById('fill'),yrsEl=document.getElementById('yrs');
+function onRange(){let a=+y0.value,b=+y1.value; if(a>b){if(this===y0)y1.value=a;else y0.value=b;} state.y0=t2y(Math.min(+y0.value,+y1.value)); state.y1=t2y(Math.max(+y0.value,+y1.value)); syncUI(true); applyFilters();}
+y0.oninput=onRange; y1.oninput=onRange;
+const PRE=[['All time',YMIN,YMAX],['Before 1800',YMIN,1799],['1800s',1800,1899],['1900–49',1900,1949],['1950s–70s',1950,1979],['1980s–90s',1980,1999],['2000s',2000,2009],['2010s–now',2010,YMAX]];
+const presets=document.getElementById('presets');
+PRE.forEach(([l,a,b])=>{const btn=document.createElement('button');btn.textContent=l;btn.onclick=()=>{state.y0=a;state.y1=b;syncUI();applyFilters();};presets.appendChild(btn);});
+document.getElementById('fame').onchange=e=>{state.fame=e.target.checked;dirty();};
+document.getElementById('edgesOn').onchange=e=>{state.edges=e.target.checked;dirty();};
+function syncUI(fromSlider){
+  if(!fromSlider){y0.value=Math.round(y2t(state.y0));y1.value=Math.round(y2t(state.y1));}
+  const a=+y0.value/10,b=+y1.value/10; fill.style.left=Math.min(a,b)+'%'; fill.style.width=Math.abs(b-a)+'%';
+  yrsEl.textContent=`${fmtY(state.y0)} – ${state.y1>=NOW?'today':state.y1}`;
+  chips.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',(state.cats>>b.dataset.i)&1?'true':'false'));
+  drawHist();
+}
+const statsEl=document.getElementById('stats');
+function applyFilters(){let v=0;for(const n of N){n.vis=(n.mask&state.cats)!==0&&n.start<=state.y1&&n.end>=state.y0; if(n.vis)v++;}
+  let ve=0; for(let k=0;k<M;k++)if(N[E[2*k]].vis&&N[E[2*k+1]].vis)ve++;
+  statsEl.innerHTML=`Showing <b>${v.toLocaleString()}</b> of ${N.length.toLocaleString()} artists · <b>${ve.toLocaleString()}</b> links<br>Drag to pan · scroll or pinch to zoom · click a star<br>Data: <a href="https://www.wikidata.org" target="_blank" rel="noopener" style="color:inherit">Wikidata</a> (CC0) · texts from <a href="https://en.wikipedia.org" target="_blank" rel="noopener" style="color:inherit">Wikipedia</a> (CC BY-SA 4.0) · Nov 2026`;
+  if(state.sel&&!state.sel.vis)select(null); drawHist(); dirty();}
+
+// histogram of career starts on the slider's axis
+const hc=document.getElementById('hist'),hx=hc.getContext('2d'); const BINS=100; const hist=CATS.map(()=>new Array(BINS).fill(0));
+N.forEach(n=>{const b=Math.min(BINS-1,Math.max(0,Math.floor(y2t(n.start)/1000*BINS)));hist[n.prim][b]++;});
+const tot=new Array(BINS).fill(0).map((_,b)=>hist.reduce((s,h)=>s+h[b],0)), hmax=Math.max(...tot);
+function drawHist(){const w=hc.clientWidth,h=hc.clientHeight; if(!w)return; hc.width=w*DPR;hc.height=h*DPR;hx.setTransform(DPR,0,0,DPR,0,0);hx.clearRect(0,0,w,h);
+  const bw=w/BINS, a=Math.min(+y0.value,+y1.value)/1000*BINS, b=Math.max(+y0.value,+y1.value)/1000*BINS;
+  for(let i=0;i<BINS;i++){let y=h-10; const on=i+1>a&&i<b;
+    for(let c=0;c<CATS.length;c++){const v=hist[c][i]; if(!v||!((state.cats>>c)&1))continue; const bh=Math.sqrt(v/hmax)*(h-12); hx.fillStyle=on?COLORS[c]:'#2a3149'; hx.fillRect(i*bw+0.5,y-bh,Math.max(1,bw-1),bh); y-=bh;}}
+  hx.fillStyle='#6b7390'; hx.font='9.5px "IBM Plex Mono",monospace'; hx.textBaseline='bottom';
+  [[YMIN,'left'],[1750,'center'],[1900,'center'],[1950,'center'],[2000,'center'],[YMAX,'right']].forEach(([yy,al])=>{if(yy<YMIN||yy>YMAX)return;const x=y2t(yy)/1000*w;hx.textAlign=al;hx.fillText(yy,x,h);});
+}
+
+// ---- search ----
+const q=document.getElementById('q'),results=document.getElementById('results'); let hits=[],hi=0;
+q.oninput=()=>{const s=q.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); if(!s){results.hidden=true;return;}
+  hits=byFame.filter(n=>n.lc.includes(s)).sort((a,b)=>(b.lc.startsWith(s)-a.lc.startsWith(s))||b.sl-a.sl).slice(0,8); hi=0; renderHits();};
+function renderHits(){ if(!hits.length){results.innerHTML='<button disabled>No artist by that name</button>';results.hidden=false;return;}
+  results.innerHTML=hits.map((n,i)=>`<button data-i="${n.i}" class="${i===hi?'on':''}"><span class="dot" style="background:${COLORS[n.prim]}"></span>${esc(n.name)}<small>${n.start}</small></button>`).join(''); results.hidden=false;
+  results.querySelectorAll('button').forEach(b=>b.onclick=()=>{results.hidden=true;q.value=N[+b.dataset.i].name;go(N[+b.dataset.i]);});}
+q.onkeydown=e=>{ if(results.hidden)return; if(e.key==='ArrowDown'){hi=Math.min(hits.length-1,hi+1);renderHits();e.preventDefault();} else if(e.key==='ArrowUp'){hi=Math.max(0,hi-1);renderHits();e.preventDefault();} else if(e.key==='Enter'&&hits[hi]){results.hidden=true;q.value=hits[hi].name;go(hits[hi]);} };
+q.onblur=()=>setTimeout(()=>results.hidden=true,150);
+
+const deck=document.getElementById('deck'),col=document.getElementById('collapse');
+col.onclick=()=>{const m=deck.classList.toggle('min');col.textContent=m?'+':'–';col.setAttribute('aria-expanded',String(!m));};
+if(innerWidth<600){deck.classList.add('min');col.textContent='+';col.setAttribute('aria-expanded','false');}
+
+addEventListener('resize',()=>{resize();drawHist();placeCard();});
+resize(); fit(false); syncUI(); applyFilters();
+if(!reduce){intro=0;const t0=performance.now();const st=now=>{let u=Math.min(1,(now-t0)/1600);intro=1-Math.pow(1-u,3);dirty();if(u<1)requestAnimationFrame(st);};requestAnimationFrame(st);}
+})();
+</script>
