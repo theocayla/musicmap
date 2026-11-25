@@ -85,6 +85,8 @@ To change the page itself (design, controls), edit `build/template.html` and run
 
 ## Credits and licence
 
+The code (the page and the `build/` scripts) is under the [Apache License 2.0](LICENSE). The data keeps its original licences:
+
 - Artist data: [Wikidata](https://www.wikidata.org), CC0.
 - Artist texts and links: [English Wikipedia](https://en.wikipedia.org), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The intro text in each artist card is taken from that artist's Wikipedia article, which the card links to.
 - Layout: [d3-force](https://github.com/d3/d3-force) (ISC licence). Fonts: Bricolage Grotesque and IBM Plex, from Google Fonts.
