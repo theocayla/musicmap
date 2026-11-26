@@ -1,15 +1,14 @@
 {
-  "name": "music-artist-atlas-build",
+  "name": "constellations-build",
   "private": true,
   "type": "module",
-  "description": "Data pipeline for the Music Artist Atlas",
+  "description": "Data pipeline for Constellations: one map per topic, written to ../data/<topic>.js",
   "scripts": {
     "candidates": "node 1-candidates.mjs",
     "details": "node 2-details.mjs",
     "wikitext": "node 3-wikitext.mjs",
     "redirects": "node 4-redirects.mjs",
-    "layout": "node 5-layout.mjs",
-    "page": "node 6-page.mjs"
+    "layout": "node 5-layout.mjs"
   },
   "dependencies": {
     "d3-force": "3.0.0"
